@@ -2,6 +2,31 @@ import requests
 import hashlib
 import simplejson
 
+class OkCoinError(Exception):
+    def __init__(self, value):
+        self.value = value
+
+    def error_code_meaning(self, error_code):
+        codes = { 10000 : 'Required parameter can not be null',
+                  10001 : 'Requests are too frequent',
+                  10002 : 'System Error',
+                  10003 : 'Restricted list request, please try again later',
+                  10004 : 'IP restriction',
+                  10005 : 'Key does not exist',
+                  10006 : 'User does not exist',
+                  10007 : 'Signatures do not match',
+                  10008 : 'Illegal parameter',
+                  10009 : 'Order does not exist',
+                  10010 : 'Insufficient balance',
+                  10011 : 'Order is less than minimum trade amount',
+                  10012 : 'Unsupported symbol (not btc_cny or ltc_cny)',
+                  10013 : 'This interface only accepts https requests',
+                  20015 : 'order does not exist' }
+        return( codes[error_code] )
+                   
+    def str(self):
+        return self.error_code_meaning(self.value)
+
 class TickerObject(object):
 
     def __init__(self,data):
@@ -94,9 +119,7 @@ class TradeAPI(MarketData):
 
         success = result[u'result']
         if( not success ):
-            print('Error: ' + str(result[u'errorCode']))
-            print( self.error_code_meaning(result[u'errorCode']) )
-            return(result)
+            raise OkCoinError(str(result[u'errorCode']))
         else:
             return(result)
 
@@ -128,23 +151,6 @@ class TradeAPI(MarketData):
         get_order_url = 'https://www.okcoin.com/api/getorder.do'
         return(self._post(params, get_order_url))
 
-    def error_code_meaning(self, error_code):
-        codes = { 10000 : 'Required parameter can not be null',
-                  10001 : 'Requests are too frequent',
-                  10002 : 'System Error',
-                  10003 : 'Restricted list request, please try again later',
-                  10004 : 'IP restriction',
-                  10005 : 'Key does not exist',
-                  10006 : 'User does not exist',
-                  10007 : 'Signatures do not match',
-                  10008 : 'Illegal parameter',
-                  10009 : 'Order does not exist',
-                  10010 : 'Insufficient balance',
-                  10011 : 'Order is less than minimum trade amount',
-                  10012 : 'Unsupported symbol (not btc_cny or ltc_cny)',
-                  10013 : 'This interface only accepts https requests' }
-        return( codes[error_code] )
-                   
     def get_future_info(self):
         params = {'partner' : self.partner}
         user_info_url = 'https://www.okcoin.com/api/future_userinfo.do'
@@ -167,3 +173,35 @@ class TradeAPI(MarketData):
         url = 'https://www.okcoin.com/api/future_trade.do'
         return(self._post(params, url))
                    
+    def future_getorders(self,symbol,status):
+        url = 'https://www.okcoin.com/api/future_getorder.do'
+        params = {'partner' : self.partner,
+              'symbol': symbol,
+              'status': status,
+              'currentPage': 1, 'pageLength': 50}
+        return(self._post(params, url))
+
+    def future_cancel(self, symbol, contract, orderid):
+            url = 'https://www.okcoin.com/api/future_cancel.do'
+            params = {'partner' : self.partner,
+                  'symbol': symbol,
+                  'contractType': contract,
+                  'orderId': orderid}
+            return(self._post(params, url))
+
+    def get_future_index(self):
+        params = {'symbol': 'btc_usd'}
+        url = 'https://www.okcoin.com/api/future_getIndex.do'
+        return float( self.get_json(url,params)['futureIndex'])
+
+    def get_usd_cny(self):
+        url = 'https://www.okcoin.com/api/future_usdCnyRate.do'
+        return float( self.get_json(url,{})['usdCnyRate'])
+
+    def withdraw(self, address, amount, trade_pwd, symbol='BTC', chargefee='0.0001'):
+        params = {'symbol': symbol, 'chargefee': chargefee,
+          'trade_pwd': trade_pwd, 'withdraw_address':address,
+          'withdraw_amount':amount, 'api_key': self.partner}
+        url = 'https://www.okcoin.com/api/v1/withdraw.do'
+        return self._post(params,url)
+
